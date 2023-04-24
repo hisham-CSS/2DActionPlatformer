@@ -4,7 +4,7 @@ using UnityEngine.InputSystem;
 [RequireComponent(typeof(Rigidbody2D))]
 public class Player : MonoBehaviour
 {
-    public float moveSpeed = 5f;
+    public float moveSpeed = 50f;
     public float jumpHeight = 2f;
     public float timeToJumpApex = 0.4f;
     public LayerMask groundLayer;

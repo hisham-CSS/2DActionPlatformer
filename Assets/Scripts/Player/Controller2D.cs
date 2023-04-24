@@ -13,6 +13,7 @@ public class Controller2D
 
     private float gravity;
     private float jumpVelocity;
+    private float maxSlopeAngle = 45.0f;
     private float rayCount = 4;
     private float horizontalRaySpacing;
     private float verticalRaySpacing;
@@ -124,23 +125,86 @@ public class Controller2D
             RaycastHit2D hit = Physics2D.Raycast(rayOrigin, Vector2.up * directionY, rayLength, collisionMask);
             if (hit)
             {
-                displacement.y = (hit.distance - skinWidth) * directionY;
-                rayLength = hit.distance;
-
-                collisions.below = directionY == -1;
-                collisions.above = directionY == 1;
-
-                if (directionY == -1)
+                // Check if the slope is steep enough to slide down
+                float slopeAngle = Vector2.Angle(hit.normal, Vector2.up);
+                if (directionY == -1 && slopeAngle > maxSlopeAngle)
                 {
-                    // Update the velocity vector based on the elapsed time and the displacement
-                    velocity.y = -(displacement.y / Time.fixedDeltaTime);
+                    float moveDistance = Mathf.Abs(displacement.x);
+                    float descendVelocity = Mathf.Sin(slopeAngle * Mathf.Deg2Rad) * moveDistance;
+
+                    if (velocity.y <= descendVelocity)
+                    {
+                        displacement = hit.normal * moveDistance;
+                        velocity.y = descendVelocity;
+                        collisions.below = true;
+                        collisions.slopeAngle = slopeAngle;
+                    }
+                }
+                else
+                {
+                    displacement.y = (hit.distance - skinWidth) * directionY;
+                    rayLength = hit.distance;
+
+                    collisions.below = directionY == -1;
+                    collisions.above = directionY == 1;
+
+                    if (directionY == -1)
+                    {
+                        // Update the velocity vector based on the elapsed time and the displacement
+                        velocity.y = -(displacement.y / Time.fixedDeltaTime);
+                    }
                 }
             }
+        }
+
+        // If we're sliding down a slope, adjust the slope angle and the displacement vector
+        if (collisions.slidingDownSlope)
+        {
+            float directionX = Mathf.Sign(displacement.x);
+            Vector2 slopeNormal = collisions.slopeNormal;
+            float slopeAngle = Vector2.Angle(Vector2.up, slopeNormal);
+
+            if (directionX != Mathf.Sign(slopeNormal.x))
+            {
+                slopeAngle = 180 - slopeAngle;
+            }
+
+            float moveDistance = Mathf.Abs(displacement.x);
+            float descendVelocity = Mathf.Sin(slopeAngle * Mathf.Deg2Rad) * moveDistance;
+            Vector2 descendDisplacement = Vector2.down * descendVelocity * Time.fixedDeltaTime;
+
+            displacement += descendDisplacement;
+            velocity.y = descendVelocity;
+            collisions.slopeAngle = slopeAngle;
+            collisions.descendingSlope = true;
+            collisions.below = true;
         }
 
         // Ensure rayLength is never greater than the distance the player is trying to move
         rayLength = Mathf.Min(rayLength, Mathf.Abs(displacement.y) + skinWidth);
     }
+
+
+
+    void ClimbSlope(ref Vector2 displacement, float slopeAngle, Vector2 slopeNormal)
+    {
+        float moveDistance = Mathf.Abs(displacement.x);
+        float climbVelocityY = Mathf.Sin(slopeAngle * Mathf.Deg2Rad) * moveDistance * 1000;
+
+        if (displacement.y <= climbVelocityY)
+        {
+            displacement.y = climbVelocityY;
+            displacement.x = Mathf.Cos(slopeAngle * Mathf.Deg2Rad) * moveDistance * Mathf.Sign(displacement.x);
+            collisions.below = true;
+            collisions.climbingSlope = true;
+            collisions.slopeAngle = slopeAngle;
+            collisions.slopeNormal = slopeNormal;
+        }
+    }
+
+
+
+
 
     Vector2 GetBottomLeftCorner()
     {
@@ -167,10 +231,24 @@ public class Controller2D
         public bool above, below;
         public bool left, right;
 
+        public bool climbingSlope;
+        public bool descendingSlope;
+        public float slopeAngle, slopeAngleOld;
+        public Vector2 slopeNormal;
+        public bool slidingDownSlope;
+
         public void Reset()
         {
             above = below = false;
             left = right = false;
+
+            climbingSlope = false;
+            descendingSlope = false;
+            slopeAngleOld = slopeAngle;
+            slopeAngle = 0;
+            slopeNormal = Vector2.zero;
+            slidingDownSlope = false;
         }
     }
+
 }
